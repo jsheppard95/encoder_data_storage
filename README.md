@@ -22,7 +22,7 @@ In [2]: now = datetime.now()
 In [3]: now
 Out[3]: datetime.datetime(2020, 3, 18, 20, 56, 42, 355520)
 
-In [4]: datetim.timestamp(now)
+In [4]: datetime.timestamp(now)
 Out[4]: 1584590202.35552
 
 In [5]: datetime.fromtimestamp(1584574331.86458)
