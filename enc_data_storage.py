@@ -6,21 +6,43 @@ Module to read encoder array PVs and output .csv file with timestamps
 
 from ophyd.signal import EpicsSignalRO
 import numpy as np
+import sys
+import time
 
 # Constants
 ENC_PV = 'MR1L0:ENC:PITCH:ACTPOSARRAY_RBV' # Encoder Array PV
 SIG_NAME = 'mr1l0_enc_pitch_actposarray_rbv' # Encoder Array PV Sinal Name
-SAMPLE_TIME = 1.0 # Timespan of array data in seconds
+EPICS_SAMPLE_TIME = 1.0 # Timespan of array data in seconds
 DELTA_T = 0.001 # Time spacing between array points in seconds
 OUTFILE_NAME = 'test_data.csv'
+ACQ_TIME = 3 # Acquisition time, integer number of seconds
 
-def cb(outfile_name=OUTFILE_NAME, value=None, timestamp=None, **kwargs):
+sig = EpicsSignalRO(ENC_PV)
+
+try:
+    sig.wait_for_connection(timeout=3.0)
+except TimeoutError:
+    print('Could not connect to data from PV %s, timed out.' % ENC_PV)
+    print('Either on wrong subnet or the ioc is off.')
+    print('Make sure you are on one of the following machines:')
+    print('psbuild-rhel7-01, psbuild-rhel7-02, lfe-console (lfe PVs),'
+          'kfe-console (kfe PVs')
+    sys.exit(1)
+
+
+tvals = [] # Time values associated with each encoder RBV
+enc_vals = [] # Encoder RBV arrays, 1000 elements each
+timestamps = [] # timestamp for each encoder array
+
+def cb(value=None, timestamp=None, **kwargs):
     """
     Callback function that gets passed to EpicsSignalRO.subscribe
     Processes the array/timestamps and computes time value for each point in the array
 
     Parameters:
     -----------
+    acq_time : int
+        seconds of data to write to file. should be a positive integer
     outfile_name : str
         Output file to write encoder array with timestamps to
     value : numpy array
@@ -32,22 +54,33 @@ def cb(outfile_name=OUTFILE_NAME, value=None, timestamp=None, **kwargs):
     # Get Current array and associated timestamp
     # Assuming timestamp corresponds to last point in array, is this an OK
     # assumption?
-    current_array = value
-    current_timestamp = timestamp # Ken mentioned system time was better, why?
-    # Inspecting with datetime.fromtimestamp(current_timestamp), this appears
-    # to be correct
-    tvals = np.zeros(current_array.size)
+    enc_vals.append(value)
+    timestamps.append(timestamp) # Ken mentioned system time was better, why?
+
+sig.subscribe(cb) # callback id
+time.sleep(ACQ_TIME) # wait the integer number of seconds to acquire
+sig.unsubscribe_all()
+
+# Inspecting with datetime.fromtimestamp(current_timestamp), this appears
+# to be correct
+# Should have list [arr1, arr2, ... , arrACQ_TIME]
+# Need to covert to arrays of tvals that match up with enc_vals
+for i in range(len(enc_vals)):
+    curr_time_array = np.zeros(enc_vals[i].size)
     # Enc Array has 1000 points sampled at 1 kHz -> 1 s of data, each point
     # 0.001 s apart
-    tvals[0] = current_timestamp - SAMPLE_TIME
-    for i in range(1, tvals.size):
-        tvals[i] = tvals[0] + (DELTA_T*i)
-    # Write tvals and current_array to file
-    outfile = open(outfile_name, 'w')
-    # write enc timestamp to top of file - used for debug
-    outfile.write(str(current_timestamp) + '\n')
+    # Assume timestamp corresponds to last point in array
+    curr_time_array[0] = timestamps[i] - EPICS_SAMPLE_TIME
+    for j in range(1, curr_time_array.size):
+        curr_time_array[j] = curr_time_array[0] + (DELTA_T*j)
+    tvals.append(curr_time_array)
+
+# Write tvals and current_array to file
+with open(OUTFILE_NAME, 'w') as outfile:
+    # HEADER: timestamp, PV
+    outfile.write(ENC_PV + '\n')
     outfile.write('\n')
     # Now write the real arrays
     for i in range(len(tvals)):
-        outfile.write(str(tvals[i]) + ' ' + str(current_array[i]) + '\n')
-    outfile.close()
+        for j in range(len(tvals[i])):
+            outfile.write(str(tvals[i][j]) + ',' + str(enc_vals[i][j]) + '\n')
