@@ -17,7 +17,7 @@ DELTA_T = 0.001 # Time spacing between array points in seconds
 OUTFILE_NAME = 'test_data.csv'
 ACQ_TIME = 3 # Acquisition time, integer number of seconds
 
-sig = EpicsSignalRO(ENC_PV)
+sig = EpicsSignalRO(ENC_PV, auto_monitor=True, name=SIG_NAME)
 
 try:
     sig.wait_for_connection(timeout=3.0)
@@ -61,6 +61,11 @@ sig.subscribe(cb) # callback id
 time.sleep(ACQ_TIME) # wait the integer number of seconds to acquire
 sig.unsubscribe_all()
 
+# Debug Print Statements
+print(timestamps)
+for i in range(len(enc_vals) - 1):
+    print(np.array_equal(enc_vals[i], enc_vals[i + 1]))
+
 # Inspecting with datetime.fromtimestamp(current_timestamp), this appears
 # to be correct
 # Should have list [arr1, arr2, ... , arrACQ_TIME]
@@ -77,9 +82,6 @@ for i in range(len(enc_vals)):
 
 # Write tvals and current_array to file
 with open(OUTFILE_NAME, 'w') as outfile:
-    # HEADER: timestamp, PV
-    outfile.write(ENC_PV + '\n')
-    outfile.write('\n')
     # Now write the real arrays
     for i in range(len(tvals)):
         for j in range(len(tvals[i])):
