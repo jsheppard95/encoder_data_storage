@@ -12,10 +12,10 @@ import time
 # Constants
 ENC_PV = 'MR1L0:ENC:PITCH:ACTPOSARRAY_RBV' # Encoder Array PV
 SIG_NAME = 'mr1l0_enc_pitch_actposarray_rbv' # Encoder Array PV Sinal Name
-EPICS_SAMPLE_TIME = 1.0 # Timespan of array data in seconds
-DELTA_T = 0.001 # Time spacing between array points in seconds
+EPICS_SAMPLE_TIME = 10.0 # Timespan of array data in seconds
+DELTA_T = 0.01 # Time spacing between array points in seconds
 OUTFILE_NAME = 'test_data.csv'
-ACQ_TIME = 3 # Acquisition time, integer number of seconds
+ACQ_TIME = 30 # Acquisition time, integer multiple of EPICS_SAMPLE_TIME
 
 sig = EpicsSignalRO(ENC_PV, auto_monitor=True, name=SIG_NAME)
 
@@ -34,7 +34,7 @@ tvals = [] # Time values associated with each encoder RBV
 enc_vals = [] # Encoder RBV arrays, 1000 elements each
 timestamps = [] # timestamp for each encoder array
 
-def cb(value=None, timestamp=None, **kwargs):
+def cb(value=None, old_value=None, timestamp=None, **kwargs):
     """
     Callback function that gets passed to EpicsSignalRO.subscribe
     Processes the array/timestamps and computes time value for each point in the array
@@ -54,12 +54,16 @@ def cb(value=None, timestamp=None, **kwargs):
     # Get Current array and associated timestamp
     # Assuming timestamp corresponds to last point in array, is this an OK
     # assumption?
-    enc_vals.append(value)
-    timestamps.append(timestamp) # Ken mentioned system time was better, why?
+    # Only taking new arrays, check for update
+    comparison = value == old_value
+    if not comparison.all():
+        enc_vals.append(value)
+        timestamps.append(timestamp) # System time may be better, why?
 
-sig.subscribe(cb) # callback id
-time.sleep(ACQ_TIME) # wait the integer number of seconds to acquire
-sig.unsubscribe_all()
+cbid = sig.subscribe(cb) # callback id
+time.sleep(ACQ_TIME) # wait ACQ_TIME to acquire data
+sig.unsubscribe(cbid)
+sig.clear_sub(cb)
 
 # Debug Print Statements
 print(timestamps)
@@ -72,8 +76,8 @@ for i in range(len(enc_vals) - 1):
 # Need to covert to arrays of tvals that match up with enc_vals
 for i in range(len(enc_vals)):
     curr_time_array = np.zeros(enc_vals[i].size)
-    # Enc Array has 1000 points sampled at 1 kHz -> 1 s of data, each point
-    # 0.001 s apart
+    # Enc Array has 1000 points sampled at 100 Hz -> 10 s of data, each point
+    # 0.01 s apart
     # Assume timestamp corresponds to last point in array
     curr_time_array[0] = timestamps[i] - EPICS_SAMPLE_TIME
     for j in range(1, curr_time_array.size):
