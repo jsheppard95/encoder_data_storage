@@ -10,25 +10,51 @@ import sys
 import time
 
 # Constants
-ENC_PV = 'MR1L0:ENC:PITCH:ACTPOSARRAY_RBV' # Encoder Array PV
-SIG_NAME = 'mr1l0_enc_pitch_actposarray_rbv' # Encoder Array PV Sinal Name
 EPICS_SAMPLE_TIME = 10.0 # Timespan of array data in seconds
 DELTA_T = 0.01 # Time spacing between array points in seconds
-OUTFILE_NAME = 'test_data.csv'
-ACQ_TIME = 30 # Acquisition time, integer multiple of EPICS_SAMPLE_TIME
 
-sig = EpicsSignalRO(ENC_PV, auto_monitor=True, name=SIG_NAME)
+##############################################################################
+# Collecting Args and Error Handling:
+def usage():
+    print('Usage:')
+    print('./optics-enc-data-storage.sh <PV> <Acquisition Time> <Outfile Name>')
+
+# Input Args: pv acq_time outfile
+args = sys.argv
+if len(sys.argv) != 4:
+    print('Incorrect Number of Arguments')
+    usage()
+    sys.exit(1)
+
+enc_pv = args[1]
+try:
+    acq_time = float(args[2])
+except ValueError:
+    print('Input Arguments In Wrong Order')
+    usage()
+    sys.exit(1)
+
+if acq_time % EPICS_SAMPLE_TIME != 0:
+    print('Acquisition Time Should Be An Integer Multiple Of %s s' % EPICS_SAMPLE_TIME)
+    usage()
+    sys.exit(1)
+
+outfile_name = args[3]
+##############################################################################
+
+# Instantiate EpicsSignalRO
+sig_name = enc_pv.lower().replace(':', '_')
+sig = EpicsSignalRO(enc_pv, auto_monitor=True, name=sig_name)
 
 try:
     sig.wait_for_connection(timeout=3.0)
 except TimeoutError:
-    print('Could not connect to data from PV %s, timed out.' % ENC_PV)
+    print('Could not connect to data from PV %s, timed out.' % enc_pv)
     print('Either on wrong subnet or the ioc is off.')
     print('Make sure you are on one of the following machines:')
     print('psbuild-rhel7-01, psbuild-rhel7-02, lfe-console (lfe PVs),'
           'kfe-console (kfe PVs')
     sys.exit(1)
-
 
 tvals = [] # Time values associated with each encoder RBV
 enc_vals = [] # Encoder RBV arrays, 1000 elements each
@@ -61,18 +87,18 @@ def cb(value=None, old_value=None, timestamp=None, **kwargs):
         timestamps.append(timestamp) # System time may be better, why?
 
 cbid = sig.subscribe(cb) # callback id
-time.sleep(ACQ_TIME) # wait ACQ_TIME to acquire data
-sig.unsubscribe(cbid)
-sig.clear_sub(cb)
-
-# Debug Print Statements
-print(timestamps)
-for i in range(len(enc_vals) - 1):
-    print(np.array_equal(enc_vals[i], enc_vals[i + 1]))
+print('Acquiring Data From PV %s ...' % enc_pv)
+print('Please wait %s s' % acq_time)
+time.sleep(acq_time - (EPICS_SAMPLE_TIME/2)) # wait time found by experiment
+# cb seems to always finish its cycle before exiting, waiting exact acq_time
+# seems to always give an extra array
+# sig.unsubscribe not working in script, causes seg fault
+sig.destroy() # This has desired behavior
+print('Data Acquired, generated file %s' % outfile_name)
 
 # Inspecting with datetime.fromtimestamp(current_timestamp), this appears
 # to be correct
-# Should have list [arr1, arr2, ... , arrACQ_TIME]
+# Should have list [arr_1, arr_2, ... , arr_(acq_time/EPICS_SAMPLE_TIME)]
 # Need to covert to arrays of tvals that match up with enc_vals
 for i in range(len(enc_vals)):
     curr_time_array = np.zeros(enc_vals[i].size)
@@ -85,7 +111,7 @@ for i in range(len(enc_vals)):
     tvals.append(curr_time_array)
 
 # Write tvals and current_array to file
-with open(OUTFILE_NAME, 'w') as outfile:
+with open(outfile_name, 'w') as outfile:
     # Now write the real arrays
     for i in range(len(tvals)):
         for j in range(len(tvals[i])):
