@@ -10,14 +10,18 @@ import sys
 import time
 
 # Constants
-EPICS_SAMPLE_TIME = 10.0 # Timespan of array data in seconds
-DELTA_T = 0.01 # Time spacing between array points in seconds
+EPICS_SAMPLE_TIME = 10.0  # Timespan of array data in seconds
+DELTA_T = 0.01  # Time spacing between array points in seconds
 
 ##############################################################################
 # Collecting Args and Error Handling:
+
+
 def usage():
     print('Usage:')
-    print('./optics-enc-data-storage.sh <PV> <Acquisition Time> <Outfile Name>')
+    print('./optics-enc-data-storage.sh <PV> <Acquisition Time> '
+          '<Outfile Name>')
+
 
 # Input Args: pv acq_time outfile
 args = sys.argv
@@ -35,7 +39,8 @@ except ValueError:
     sys.exit(1)
 
 if acq_time % EPICS_SAMPLE_TIME != 0:
-    print('Acquisition Time Should Be An Integer Multiple Of %s s' % EPICS_SAMPLE_TIME)
+    print('Acquisition Time Should Be An Integer Multiple Of %s s'
+          % EPICS_SAMPLE_TIME)
     usage()
     sys.exit(1)
 
@@ -56,14 +61,16 @@ except TimeoutError:
           'kfe-console (kfe PVs')
     sys.exit(1)
 
-tvals = [] # Time values associated with each encoder RBV
-enc_vals = [] # Encoder RBV arrays, 1000 elements each
-timestamps = [] # timestamp for each encoder array
+tvals = []  # Time values associated with each encoder RBV
+enc_vals = []  # Encoder RBV arrays, 1000 elements each
+timestamps = []  # timestamp for each encoder array
+
 
 def cb(value=None, old_value=None, timestamp=None, **kwargs):
     """
     Callback function that gets passed to EpicsSignalRO.subscribe
-    Processes the array/timestamps and computes time value for each point in the array
+    Processes the array/timestamps and computes time value for each point in
+    the array
 
     Parameters:
     -----------
@@ -84,16 +91,17 @@ def cb(value=None, old_value=None, timestamp=None, **kwargs):
     comparison = value == old_value
     if not comparison.all():
         enc_vals.append(value)
-        timestamps.append(timestamp) # System time may be better, why?
+        timestamps.append(timestamp)  # System time may be better, why?
 
-cbid = sig.subscribe(cb) # callback id
+
+cbid = sig.subscribe(cb)  # callback id
 print('Acquiring Data From PV %s ...' % enc_pv)
 print('Please wait %s s' % acq_time)
-time.sleep(acq_time - (EPICS_SAMPLE_TIME/2)) # wait time found by experiment
+time.sleep(acq_time - (EPICS_SAMPLE_TIME/2))  # wait time found by experiment
 # cb seems to always finish its cycle before exiting, waiting exact acq_time
 # seems to always give an extra array
 # sig.unsubscribe not working in script, causes seg fault
-sig.destroy() # This has desired behavior
+sig.destroy()  # This has desired behavior
 print('Data Acquired, generated file %s' % outfile_name)
 
 # Inspecting with datetime.fromtimestamp(current_timestamp), this appears

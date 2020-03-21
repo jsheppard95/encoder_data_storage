@@ -1,19 +1,33 @@
 # encoder_data_storage
-Current Usage:
-
-In an IPython Session:
-
+Usage:
 ```
-from enc_data_storge import *
-enc_signal = EpicsSignalRO(ENC_PV, automonitor=True, name=SIG_NAME) # ENC_PV and SIG_NAME defined in enc_data_storage.py
-enc_signal.subscribe(cb) # cb defined in enc_data_storage.py
+# Go to directory with script:
+$ cd /reg/g/pcds/l2si-commissioning/mirrors/encoder_data_storage/
 
-# Wait for an arbitrary amount of time
-enc_signal.unsubscribe_all()
+# Run Script
+$ ./optics-enc-data-storage.sh <PV> <Acquisition Time> <Outfile Name>
+
+# Print Usage Message
+$ ./optics-enc-data-storage.sh
+
+# Example Usage:
+$ ./optics-enc-data-storage.sh MR1L0:ENC:PITCH:ACTPOSARRAY_RBV 30 test.csv
+```
+
+Parameters:
+```
+<PV> : str
+    Encoder Array PV to acquire data from.
+    See https://confluence.slac.stanford.edu/display/PCDS/Offset+Mirror#OffsetMirror-EncoderReadbacks:
+<Acquisition Time> : int
+    Timespan of <PV> to write to file. Should be an integer multiple of 10 s
+    since each array contains 10 s of data
+<Outfile Name> : str
+    Output file name, include full path, otherwise will write file to
+    current directory
 ```
 
 Converting Between Timestamp and Datetime:
-
 ```
 In [1]: from datetime import datetime
 
